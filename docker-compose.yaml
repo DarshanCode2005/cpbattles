@@ -1,0 +1,24 @@
+services:
+  db:
+    image: postgres
+    container_name: cpbattles-db
+    ports:
+      - "3456:5432"
+    environment:
+      POSTGRES_DB: cpbattles
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  jobs:
+    image: mongo
+    container_name: cpbattles-jobs
+    ports:
+      - "27017:27017"
+    volumes:
+      - jobs_data:/data/db
+
+volumes:
+  db_data:
+  jobs_data:

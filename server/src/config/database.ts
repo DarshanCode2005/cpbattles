@@ -1,0 +1,12 @@
+import { Pool } from "pg";
+import { DatabaseClient } from "../utils/postgres";
+
+export const pool = new Pool({
+  user: process.env.DATABASE_USERNAME,
+  password: process.env.DATABASE_PASSWORD,
+  database: process.env.DATABASE_NAME,
+  host: process.env.DATABASE_HOST || "localhost",
+  port: Number(process.env.DATABASE_PORT) || 5432,
+});
+
+export const db = new DatabaseClient(pool);

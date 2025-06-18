@@ -1,0 +1,181 @@
+import { useNavigate } from "react-router";
+import { BASE_API_URL, useAuth } from "../hooks/useAuth";
+import Button from "../components/Button";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+export default function CreateBattle() {
+  const auth = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: async (details: {
+      name: string;
+      startTime: number;
+      duration: number;
+      minRating: number;
+      maxRating: number;
+      problemCount: number;
+    }) => {
+      if (!auth.authed) throw new Error("Unauthorized");
+
+      const response = await fetch(BASE_API_URL + "/api/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${auth.jwt}`,
+        },
+        body: JSON.stringify(details),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          (await response.json()).error || "Failed to create battle"
+        );
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["battles"] });
+      navigate("/");
+    },
+    onError: (error) => {
+      console.error("Error creating battle:", error);
+    },
+  });
+
+  if (auth.loading) {
+    return (
+      <div className="flex flex-col items-center h-full flex-1 max-w-7xl w-9/12 mx-auto py-8 gap-4">
+        <div className="text-xl">Loading...</div>
+      </div>
+    );
+  }
+  if (!auth.authed) {
+    navigate("/");
+    return null;
+  }
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const details = {
+      name: formData.get("title") as string,
+      startTime: new Date(formData.get("startTime") as string).getTime(),
+      duration: parseInt(formData.get("duration") as string, 10),
+      minRating: parseInt(formData.get("minRating") as string, 10),
+      maxRating: parseInt(formData.get("maxRating") as string, 10),
+      problemCount: parseInt(formData.get("problemCount") as string, 10),
+    };
+
+    mutation.mutate(details);
+  };
+  const status = mutation.status;
+  const error = mutation.error instanceof Error ? mutation.error.message : null;
+  const isDisabled = status === "pending" || status === "success";
+
+  return (
+    <>
+      <div className="flex flex-col items-center h-full flex-1 max-w-7xl w-9/12 mx-auto py-8 gap-4">
+        <h1 className="text-2xl font-bold mb-4">Create a Battle</h1>
+
+        <form className="w-full max-w-lg" onSubmit={handleSubmit}>
+          <div className="mb-4">
+            <label className="block text-gray-700 mb-2" htmlFor="title">
+              Battle Title
+            </label>
+            <input
+              type="text"
+              name="title"
+              id="title"
+              className="border border-gray-300 rounded px-4 py-2 w-full"
+              placeholder="Enter battle title"
+            />
+          </div>
+          <div className="mb-4 flex items-center gap-4">
+            <div className="w-full">
+              <label className="block text-gray-700 mb-2" htmlFor="startTime">
+                Start Time
+              </label>
+              <input
+                type="datetime-local"
+                name="startTime"
+                id="startTime"
+                className="border border-gray-300 rounded px-4 py-2 w-full"
+              />
+            </div>
+            <div className="w-full">
+              <label className="block text-gray-700 mb-2" htmlFor="duration">
+                Duration (minutes)
+              </label>
+              <input
+                type="number"
+                name="duration"
+                id="duration"
+                className="border border-gray-300 rounded px-4 py-2 w-full"
+                placeholder="Enter duration in minutes"
+              />
+            </div>
+          </div>
+          <div className="mb-4 flex items-center gap-4">
+            <div className="w-full">
+              <label className="block text-gray-700 mb-2" htmlFor="minRating">
+                Minimum Rating
+              </label>
+              <input
+                type="number"
+                name="minRating"
+                id="minRating"
+                className="border border-gray-300 rounded px-4 py-2 w-full"
+                placeholder="Enter minimum rating"
+              />
+            </div>
+            <div className="w-full">
+              <label className="block text-gray-700 mb-2]" htmlFor="maxRating">
+                Maximum Rating
+              </label>
+              <input
+                type="number"
+                name="maxRating"
+                id="maxRating"
+                className="border border-gray-300 rounded px-4 py-2 w-full"
+                placeholder="Enter maximum rating"
+              />
+            </div>
+          </div>
+          <div className="mb-4">
+            <label className="block text-gray-700 mb-2" htmlFor="problemCount">
+              Number of Problems
+            </label>
+            <input
+              type="number"
+              name="problemCount"
+              id="problemCount"
+              className="border border-gray-300 rounded px-4 py-2 w-full"
+              placeholder="Enter number of problems (3-10)"
+            />
+          </div>
+          <Button type="submit" disabled={isDisabled}>
+            Create Battle
+          </Button>
+        </form>
+
+        {status === "pending" && (
+          <div className="mt-4 text-gray-600">Creating battle...</div>
+        )}
+
+        {status === "error" && (
+          <div className="mt-4 text-red-600">
+            Error: {error || "Failed to create battle"}
+          </div>
+        )}
+        {status === "success" && (
+          <div className="mt-4 text-green-600">
+            Battle created successfully!
+          </div>
+        )}
+      </div>
+    </>
+  );
+}

@@ -1,0 +1,208 @@
+import { Pool, QueryResultRow, PoolClient } from "pg";
+
+export const queries = {
+  INSERT_USER: "INSERT INTO users (handle) VALUES ($1) RETURNING id",
+  CREATE_VERIFICATION:
+    "INSERT INTO verifications (user_id, contest_id, index) VALUES ($1, $2, $3) RETURNING id",
+  DELETE_VERIFICATIONS_BY_USER_ID:
+    "DELETE FROM verifications WHERE user_id = $1",
+  VERIFY_USER:
+    "UPDATE users SET verified = TRUE, last_verified = NOW() WHERE id = $1 RETURNING *",
+  DELETE_EXPIRED_VERIFICATIONS:
+    "DELETE FROM verifications WHERE created_at < NOW() - INTERVAL '5 minutes';",
+  CREATE_BATTLE:
+    "INSERT INTO battles (created_by, title, start_time, duration_min, min_rating, max_rating, num_problems) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+  JOIN_BATTLE:
+    "INSERT INTO battle_participants (battle_id, user_id) VALUES ($1, $2) RETURNING id",
+  START_BATTLE:
+    "UPDATE battles SET status = 'in_progress' WHERE id = $1 RETURNING *",
+  END_BATTLE:
+    "UPDATE battles SET status = 'completed' WHERE id = $1 RETURNING *",
+  INSERT_PROBLEM_TO_BATTLE:
+    "INSERT INTO battle_problems (battle_id, contest_id, index, rating) VALUES ($1, $2, $3, $4) RETURNING id",
+} as const;
+
+export type Query = (typeof queries)[keyof typeof queries];
+
+interface QueryResult {
+  INSERT_USER: {
+    id: number;
+  }[];
+  CREATE_VERIFICATION: {
+    id: number;
+  }[];
+  DELETE_VERIFICATIONS_BY_USER_ID: {}[];
+  VERIFY_USER: User[];
+}
+
+export class DatabaseClient {
+  constructor(private readonly pool: Pool) {}
+
+  query(
+    query: typeof queries.INSERT_USER,
+    params: [string],
+    client: PoolClient
+  ): Promise<QueryResult["INSERT_USER"]>;
+  query(
+    query: typeof queries.CREATE_VERIFICATION,
+    params: [number, number, string],
+    client: PoolClient
+  ): Promise<QueryResult["CREATE_VERIFICATION"]>;
+  query(
+    query: typeof queries.DELETE_VERIFICATIONS_BY_USER_ID,
+    params: [number],
+    client: PoolClient
+  ): Promise<QueryResult["DELETE_VERIFICATIONS_BY_USER_ID"]>;
+  query(
+    query: typeof queries.VERIFY_USER,
+    params: [number],
+    client: PoolClient
+  ): Promise<QueryResult["VERIFY_USER"]>;
+
+  async query<T extends QueryResultRow>(
+    text: string,
+    params?: any[],
+    client?: PoolClient
+  ): Promise<T[]>;
+  async query<T extends QueryResultRow>(
+    text: string,
+    params?: any[],
+    client?: PoolClient
+  ): Promise<T[]> {
+    if (client) {
+      const result = await client.query<T>(text, params);
+      return result.rows;
+    } else {
+      const client = await this.pool.connect();
+      try {
+        const result = await client.query<T>(text, params);
+        return result.rows;
+      } catch (error) {
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+  }
+
+  async close(): Promise<void> {
+    await this.pool.end();
+  }
+
+  async getUserByHandle(handle: string) {
+    const result = await this.query("SELECT * FROM users WHERE handle = $1", [
+      handle,
+    ]);
+    return result.length > 0 ? result[0] : null;
+  }
+
+  async getVerificationsByUserId(userId: number) {
+    const result = await this.query<Verification>(
+      "SELECT * FROM verifications WHERE user_id = $1",
+      [userId]
+    );
+    return result;
+  }
+
+  async getBattleById(battleId: number) {
+    const result = await this.query<Battle>(
+      "SELECT * FROM battles WHERE id = $1",
+      [battleId]
+    );
+    return result.length > 0 ? result[0] : null;
+  }
+
+  async getBattleParticipants(battleId: number) {
+    const result = await this.query<User>(
+      "SELECT u.* FROM battle_participants AS bp JOIN users AS u ON bp.user_id = u.id WHERE bp.battle_id = $1;",
+      [battleId]
+    );
+    return result;
+  }
+
+  async getBattleProblems(battleId: number) {
+    const result = await this.query<BattleProblem>(
+      "SELECT * FROM battle_problems WHERE battle_id = $1",
+      [battleId]
+    );
+    return result;
+  }
+
+  async getBattlesByParticipantId(userId: number) {
+    const result = await this.query<Battle>(
+      "SELECT b.* FROM battles b JOIN battle_participants bp ON b.id = bp.battle_id WHERE bp.user_id = $1;",
+      [userId]
+    );
+    return result;
+  }
+
+  async getBattleSubmissions(battleId: number) {
+    const result = await this.query<Submission>(
+      "SELECT * FROM submissions WHERE battle_id = $1",
+      [battleId]
+    );
+    return result;
+  }
+}
+
+export interface User {
+  id: number;
+  handle: string;
+  verified: boolean;
+  last_verified: Date | null;
+  verification_token: string | null;
+  session_token: string | null;
+  created_at: Date;
+  verified_at: Date | null;
+  last_login: Date | null;
+}
+
+export interface Verification {
+  id: number;
+  user_id: number;
+  created_at: Date;
+  contest_id: number;
+  index: string;
+}
+
+export interface Battle {
+  id: number;
+  created_by: number;
+  created_at: Date;
+  status: "pending" | "in_progress" | "completed";
+  title: string;
+  start_time: Date;
+  duration_min: number;
+  min_rating: number;
+  max_rating: number;
+  num_problems: number;
+  join_token: string;
+}
+
+export interface BattleParticipant {
+  id: number;
+  battle_id: number;
+  user_id: number;
+  created_at: Date;
+}
+
+export interface BattleProblem {
+  id: number;
+  battle_id: number;
+  contest_id: number;
+  index: string;
+  rating: number;
+  created_at: Date;
+}
+
+export interface Submission {
+  id: number;
+  cf_id: string;
+  battle_id: number;
+  user_id: number;
+  contest_id: number;
+  index: string;
+  verdict: string;
+  passed_tests: number;
+  time: Date;
+}
