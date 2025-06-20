@@ -249,13 +249,6 @@ export default function OngoingBattle({
               {submissions.length > 0
                 ? submissions.map((submission) => (
                     <p key={submission.id}>
-                      <a
-                        href={`https://codeforces.com/contest/${submission.contest_id}/submission/${submission.cf_id}`}
-                        target="_blank"
-                        className="text-blue-500 hover:underline"
-                      >
-                        {submission.cf_id}
-                      </a>{" "}
                       [{relativeTimeDiff(new Date(submission.time), startTime)}]{" "}
                       <span className="font-semibold">
                         {handleOf(submission.user_id)}

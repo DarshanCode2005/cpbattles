@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS battles (
     duration_min INTEGER NOT NULL,
     min_rating INTEGER NOT NULL,
     max_rating INTEGER NOT NULL,
-    num_problems INTEGER NOT NULL
-    join_token TEXT UNIQUE NOT NULL, -- Token for joining the battle
+    num_problems INTEGER NOT NULL,
+    join_token TEXT UNIQUE NOT NULL -- Token for joining the battle
 );
 
 CREATE TABLE IF NOT EXISTS battle_participants (
