@@ -47,14 +47,14 @@ agenda.define("battle:start", async (job: Job<{ battleId: number }>) => {
 
     const participants = await db.getBattleParticipants(battleId);
 
-    agenda.every("1 minute", "battle:poll-submissions", {
+    await agenda.every("1 minute", "battle:poll-submissions", {
       battle: battle,
       problems: problems,
       participants: participants,
       battleId: battleId,
     });
 
-    agenda.schedule(
+    await agenda.schedule(
       new Date(
         new Date(battle.start_time).getTime() + battle.duration_min * 60 * 1000
       ),
