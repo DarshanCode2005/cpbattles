@@ -32,9 +32,9 @@ export const validateBattleCreation: RequestHandler = (req, res, next) => {
     return;
   }
 
-  if (startTime.getTime() < new Date().getTime() + 5 * 60 * 1000) {
+  if (startTime.getTime() < new Date().getTime() + 0.5 * 60 * 1000) {
     res.status(400).json({
-      error: "Start time must be at least 5 minutes in the future",
+      error: "Start time must be at least 30 seconds in the future",
     });
     return;
   }
