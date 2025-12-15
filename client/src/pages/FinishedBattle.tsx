@@ -32,7 +32,7 @@ export default function FinishedBattle({
   >({
     queryKey: ["battle", battle.id, "standings"],
     queryFn: async () => {
-      const response = await auth.fetch(
+      const response = await fetch(
         `${BASE_API_URL}/api/battle/${battle.id}/standings`,
         {
           headers: {
@@ -50,7 +50,7 @@ export default function FinishedBattle({
   const { data: problems, status: problemsStatus } = useQuery<BattleProblem[]>({
     queryKey: ["battles", battle.id, "problems"],
     queryFn: async () => {
-      const response = await auth.fetch(
+      const response = await fetch(
         `${BASE_API_URL}/api/battle/${battle.id}/problems`,
         {
           headers: {
@@ -70,7 +70,7 @@ export default function FinishedBattle({
   >({
     queryKey: ["battles", battle.id, "submissions"],
     queryFn: async () => {
-      const response = await auth.fetch(
+      const response = await fetch(
         `${BASE_API_URL}/api/battle/${battle.id}/submissions`,
         {
           headers: {
