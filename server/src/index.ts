@@ -4,7 +4,6 @@ import dotenv from "dotenv";
 import { agenda } from "./config/agenda";
 import authRoutes from "./routes/auth";
 import battleRoutes from "./routes/battles";
-// sessions are no longer required for auth PKCE flow
 
 dotenv.config();
 
