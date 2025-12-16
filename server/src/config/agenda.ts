@@ -11,7 +11,40 @@ export const agenda = new Agenda({
   db: {
     address: mongoConnectionString,
   },
+  processEvery: "30 seconds",
 });
+
+let agendaAvailable = false;
+
+agenda.on("error", (error) => {
+  // Suppress MongoDB connection errors - they're expected if MongoDB isn't available
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  if (!errorMessage.includes("MongoServerSelectionError") && 
+      !errorMessage.includes("SSL") &&
+      !errorMessage.includes("tlsv1")) {
+    console.error("Agenda error:", error);
+  }
+  agendaAvailable = false;
+});
+
+agenda.on("ready", async () => {
+  console.log("Agenda is ready");
+  agendaAvailable = true;
+  try {
+    await agenda.start();
+  } catch (error) {
+    console.warn("Failed to start Agenda:", error instanceof Error ? error.message : String(error));
+    agendaAvailable = false;
+  }
+});
+
+agenda.on("fail", (error) => {
+  agendaAvailable = false;
+});
+
+export function isAgendaAvailable(): boolean {
+  return agendaAvailable;
+}
 
 agenda.define("battle:start", async (job: Job<{ battleId: number }>) => {
   const { battleId } = job.attrs.data;
@@ -30,7 +63,6 @@ agenda.define("battle:start", async (job: Job<{ battleId: number }>) => {
 
     const participants = await db.getBattleParticipants(battleId);
 
-    // choose problems
     const problems = await cf.chooseProblems(
       battle.min_rating,
       battle.max_rating,
@@ -106,7 +138,6 @@ export async function pollSubmissions(
     storedSubmissions.map((sub) => sub.cf_id)
   );
 
-  // fetch submissions from codeforces API
   for (const participant of participants) {
     const allSubmissions = await cf.getSubmissions(participant.handle);
 
@@ -178,16 +209,17 @@ agenda.define("battle:end", async (job: Job<{ battleId: number }>) => {
     console.log(`Battle ${battleId} ended successfully`);
     await client.query("COMMIT");
 
-    agenda.cancel({ "data.battleId": battleId });
+    if (isAgendaAvailable()) {
+      try {
+        await agenda.cancel({ "data.battleId": battleId });
+      } catch (error) {
+        console.warn(`Failed to cancel polling jobs for battle ${battleId}:`, error instanceof Error ? error.message : String(error));
+      }
+    }
   } catch (error) {
     console.error(`Failed to end battle ${battleId}:`, error);
     await client.query("ROLLBACK");
   } finally {
     client.release();
   }
-});
-
-// Schedule recurring cleanup job
-agenda.on("ready", async () => {
-  agenda.start();
 });

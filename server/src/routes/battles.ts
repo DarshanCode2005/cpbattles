@@ -10,6 +10,7 @@ import {
   joinBattle,
   refreshSubmissions,
   cancelBattle,
+  startBattle,
 } from "../controllers/battleController";
 import { authenticateSession } from "../middleware/auth";
 import { validateBattleCreation } from "../middleware/validation";
@@ -43,5 +44,6 @@ router.get(
   refreshSubmissions
 );
 router.delete("/battle/:id", authenticateSession, cancelBattle);
+router.post("/battle/:id/start", authenticateSession, startBattle);
 
 export default router;
