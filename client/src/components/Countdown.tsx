@@ -42,8 +42,5 @@ function formatTimeLeft(timeLeft: {
   minutes: number;
   seconds: number;
 }) {
-  if (timeLeft.hours === 0 && timeLeft.minutes === 0 && timeLeft.seconds === 0) {
-    return "Battle should have started";
-  }
   return `${timeLeft.hours}h ${timeLeft.minutes}m ${timeLeft.seconds}s`;
 }

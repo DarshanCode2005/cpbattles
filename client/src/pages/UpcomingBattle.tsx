@@ -19,7 +19,8 @@ export default function UpcomingBattle({
 
   const isCreator = auth.authed && auth.userId === battle.created_by;
   const startTime = new Date(battle.start_time);
-  const [hasPassedStartTime, setHasPassedStartTime] = useState(new Date() >= startTime);
+  const [hasPassedStartTime, setHasPassedStartTime] = useState(false);
+  const [showStart, setShowStart] = useState(false);
 
   useEffect(() => {
     const checkTime = () => {
@@ -27,7 +28,10 @@ export default function UpcomingBattle({
       const passed = now >= startTime;
       setHasPassedStartTime(passed);
       if (passed && battle.status === "pending") {
-        queryClient.invalidateQueries({ queryKey: ["battle", battle.id] });
+        queryClient.refetchQueries({ queryKey: ["battle", battle.id.toString()] });
+        if (!hasPassedStartTime) {
+          setTimeout(() => setShowStart(true), 5000);
+        }
       }
     };
 
@@ -39,6 +43,7 @@ export default function UpcomingBattle({
   const handleStart = async () => {
     setStarting(true);
     try {
+      if (!auth.authed) return;
       const response = await auth.fetch(
         `${BASE_API_URL}/api/battle/${battle.id}/start`,
         {
@@ -54,10 +59,11 @@ export default function UpcomingBattle({
         throw new Error(error.error || "Failed to start battle");
       }
 
-      await queryClient.refetchQueries({ queryKey: ["battle", battle.id] });
+      await queryClient.refetchQueries({ queryKey: ["battle", battle.id.toString()] });
     } catch (error) {
       alert(error instanceof Error ? error.message : "Failed to start battle");
       setStarting(false);
+      queryClient.invalidateQueries({ queryKey: ["battle", battle.id.toString()] });
     }
   };
 
@@ -68,6 +74,7 @@ export default function UpcomingBattle({
 
     setCancelling(true);
     try {
+      if (!auth.authed) return;
       const response = await auth.fetch(
         `${BASE_API_URL}/api/battle/${battle.id}`,
         {
@@ -107,6 +114,7 @@ export default function UpcomingBattle({
   const { data: battlePlayers, status } = useQuery<User[]>({
     queryKey: ["battleParticipants", battle.id],
     queryFn: async () => {
+      if (!auth.authed) return;
       const response = await auth.fetch(
         `${BASE_API_URL}/api/battle/${battle.id}/participants`,
         {
@@ -148,16 +156,14 @@ export default function UpcomingBattle({
       {/* countdown */}
       <div className="text-center mt-4">
         <h2 className="text-xl font-semibold mb-2">
-          {hasPassedStartTime ? "Battle start time has passed" : "Battle starts in"}
+          {hasPassedStartTime ? "Battle starting soon" : "Battle starts in"}
         </h2>
         <Countdown
           targetTime={startTime}
-          onZero={() => {
-            queryClient.refetchQueries({ queryKey: ["battle", battle.id] });
-          }}
+          onZero={() => {}}
         />
         <div className="mt-4 flex gap-4 justify-center">
-          {isCreator && hasPassedStartTime && battle.status === "pending" && (
+          {isCreator && showStart && battle.status === "pending" && (
             <button
               onClick={handleStart}
               disabled={starting}

@@ -17,13 +17,7 @@ export const agenda = new Agenda({
 let agendaAvailable = false;
 
 agenda.on("error", (error) => {
-  // Suppress MongoDB connection errors - they're expected if MongoDB isn't available
-  const errorMessage = error instanceof Error ? error.message : String(error);
-  if (!errorMessage.includes("MongoServerSelectionError") && 
-      !errorMessage.includes("SSL") &&
-      !errorMessage.includes("tlsv1")) {
     console.error("Agenda error:", error);
-  }
   agendaAvailable = false;
 });
 
@@ -39,6 +33,7 @@ agenda.on("ready", async () => {
 });
 
 agenda.on("fail", (error) => {
+  console.error("Agenda failed:", error);
   agendaAvailable = false;
 });
 
@@ -81,12 +76,12 @@ agenda.define("battle:start", async (job: Job<{ battleId: number }>) => {
     await db.query(queries.START_BATTLE, [battleId], client);
     console.log(`Battle ${battleId} started successfully`);
 
-    await agenda.every("1 minute", "battle:poll-submissions", {
+    await agenda.create("battle:poll-submissions", {
       battle: battle,
       problems: problems,
       participants: participants,
       battleId: battleId,
-    });
+    }).repeatEvery("1 minute").save();
 
     await agenda.schedule(
       new Date(
@@ -199,7 +194,7 @@ agenda.define("battle:end", async (job: Job<{ battleId: number }>) => {
   console.log(`Ending battle ${battleId}`);
   const client = await pool.connect();
   try {
-    client.query("BEGIN");
+    await client.query("BEGIN");
     const battle = await db.getBattleById(battleId);
     if (!battle) {
       console.error(`Battle ${battleId} not found`);

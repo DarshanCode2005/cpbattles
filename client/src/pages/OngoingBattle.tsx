@@ -9,13 +9,9 @@ import {
 import Countdown from "../components/Countdown";
 import { addMinutes, differenceInSeconds } from "date-fns";
 import { useNavigate } from "react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-export default function OngoingBattle({
-  battle,
-}: {
-  battle: Battle;
-}) {
+export default function OngoingBattle({ battle }: { battle: Battle }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [cancelling, setCancelling] = useState(false);
@@ -23,13 +19,47 @@ export default function OngoingBattle({
   const auth = useAuth();
   const isCreator = auth.authed && auth.userId === battle.created_by;
 
+  const [passedTime, setPassedTime] = useState(false);
+  const [showEnd, setShowEnd] = useState(false);
+  const [ending, setEnding] = useState(false);
+
+  const startTime = new Date(battle.start_time);
+  const endTime = addMinutes(startTime, battle.duration_min);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      const passed = now >= endTime;
+      setPassedTime(passed);
+      if (passed && battle.status === "in_progress") {
+        setTimeout(
+          () =>
+            queryClient.invalidateQueries({
+              queryKey: ["battle", battle.id.toString()],
+            }),
+          500
+        );
+      }
+      if (now.getTime() >= endTime.getTime() + 2000) {
+        setShowEnd(true);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [endTime, battle.id, queryClient]);
+
   const handleCancel = async () => {
-    if (!confirm("Are you sure you want to cancel this battle? This action cannot be undone.")) {
+    if (
+      !confirm(
+        "Are you sure you want to cancel this battle? This action cannot be undone."
+      )
+    ) {
       return;
     }
 
     setCancelling(true);
     try {
+      if (!auth.authed) return;
       const response = await auth.fetch(
         `${BASE_API_URL}/api/battle/${battle.id}`,
         {
@@ -54,19 +84,52 @@ export default function OngoingBattle({
     }
   };
 
-  const startTime = new Date(battle.start_time);
-  const endTime = addMinutes(startTime, battle.duration_min);
+  const handleEnd = async () => {
+    if (!confirm("Are you sure you want to end this battle? This action cannot be undone.")) {
+      return;
+    }
+
+    setEnding(true);
+    try {
+      if (!auth.authed) return;
+      const response = await auth.fetch(
+        `${BASE_API_URL}/api/battle/${battle.id}/end`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to end battle");
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["battles"] });
+      navigate("/");
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to end battle");
+    } finally {
+      setEnding(false);
+    }
+  };
 
   const { data: battleProblems, status: problemsStatus } = useQuery<
     BattleProblem[]
   >({
     queryKey: ["battles", battle.id, "problems"],
     queryFn: async () => {
-      const response = await auth.fetch(`${BASE_API_URL}/api/battle/${battle.id}/problems`, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      if (!auth.authed) return;
+      const response = await auth.fetch(
+        `${BASE_API_URL}/api/battle/${battle.id}/problems`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
       if (!response.ok) {
         throw new Error("Failed to fetch battle problems");
       }
@@ -91,11 +154,15 @@ export default function OngoingBattle({
   >({
     queryKey: ["battles", battle.id, "standings"],
     queryFn: async () => {
-      const response = await auth.fetch(`${BASE_API_URL}/api/battle/${battle.id}/standings`, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      if (!auth.authed) return;
+      const response = await auth.fetch(
+        `${BASE_API_URL}/api/battle/${battle.id}/standings`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
       if (!response.ok) {
         throw new Error("Failed to fetch battle standings");
       }
@@ -108,11 +175,15 @@ export default function OngoingBattle({
   >({
     queryKey: ["battles", battle.id, "submissions"],
     queryFn: async () => {
-      const response = await auth.fetch(`${BASE_API_URL}/api/battle/${battle.id}/submissions`, {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
+      if (!auth.authed) return;
+      const response = await auth.fetch(
+        `${BASE_API_URL}/api/battle/${battle.id}/submissions`,
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
       if (!response.ok) {
         throw new Error("Failed to fetch battle submissions");
       }
@@ -251,17 +322,19 @@ export default function OngoingBattle({
         </div>
         <div className="flex-1 ">
           <div className="text-lg font-semibold text-center mb-2">
-            Battle ends in
+            {passedTime ? "Battle ending..." : "Battle ends in"}
           </div>
           <div className="text-center">
-            <Countdown
-              targetTime={endTime}
-              onZero={() => {
-                queryClient.invalidateQueries({
-                  queryKey: ["battles", battle.id],
-                });
-              }}
-            />
+            <Countdown targetTime={endTime} onZero={() => {}} />
+            {isCreator && showEnd && (
+              <button
+                onClick={handleEnd}
+                disabled={ending}
+                className="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                {ending ? "Ending..." : "End Battle"}
+              </button>
+            )}
             {isCreator && (
               <button
                 onClick={handleCancel}

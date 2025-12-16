@@ -331,6 +331,10 @@ export const battleService = {
       throw new Error(`Battle is already ${battle.status}`);
     }
 
+    if (isAgendaAvailable()) {
+      throw new Error("Agenda is already running for this battle");
+    }
+
     const { cf } = await import("../utils/codeforces");
     const client = await pool.connect();
 
@@ -359,12 +363,12 @@ export const battleService = {
 
       if (isAgendaAvailable()) {
         try {
-          await agenda.every("1 minute", "battle:poll-submissions", {
+          await agenda.create("battle:poll-submissions", {
             battle: battle,
             problems: problems,
             participants: participants,
             battleId: battleId,
-          });
+          }).repeatEvery("1 minute").save();
 
           const endTime = new Date(
             new Date(battle.start_time).getTime() + battle.duration_min * 60 * 1000
@@ -379,6 +383,40 @@ export const battleService = {
 
       await client.query("COMMIT");
       return { message: "Battle started successfully" };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async endBattle(battleId: number, userId: number) {
+    const battle = await db.getBattleById(battleId);
+    if (!battle) {
+      throw new Error("Battle not found");
+    }
+
+    if (battle.created_by !== userId) {
+      throw new Error("Only the battle creator can end the battle");
+    }
+
+    if (battle.status !== "in_progress") {
+      throw new Error(`Battle is already ${battle.status}`);
+    }
+
+    // TODO FIX: Race condition with agenda job
+
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      await db.query(queries.END_BATTLE, [battleId], client);
+      console.log(`Battle ${battleId} ended successfully`);
+
+      await client.query("COMMIT");
+      return { message: "Battle ended successfully" };
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
