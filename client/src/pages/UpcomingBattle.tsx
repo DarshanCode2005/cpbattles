@@ -13,10 +13,53 @@ export default function UpcomingBattle({
   const auth = useAuth();
   const [copied, setCopied] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [starting, setStarting] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const isCreator = auth.authed && auth.userId === battle.created_by;
+  const startTime = new Date(battle.start_time);
+  const [hasPassedStartTime, setHasPassedStartTime] = useState(new Date() >= startTime);
+
+  useEffect(() => {
+    const checkTime = () => {
+      const now = new Date();
+      const passed = now >= startTime;
+      setHasPassedStartTime(passed);
+      if (passed && battle.status === "pending") {
+        queryClient.invalidateQueries({ queryKey: ["battle", battle.id] });
+      }
+    };
+
+    checkTime();
+    const interval = setInterval(checkTime, 1000);
+    return () => clearInterval(interval);
+  }, [startTime, battle.status, battle.id, queryClient]);
+
+  const handleStart = async () => {
+    setStarting(true);
+    try {
+      const response = await auth.fetch(
+        `${BASE_API_URL}/api/battle/${battle.id}/start`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to start battle");
+      }
+
+      await queryClient.refetchQueries({ queryKey: ["battle", battle.id] });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to start battle");
+      setStarting(false);
+    }
+  };
 
   const handleCancel = async () => {
     if (!confirm("Are you sure you want to cancel this battle? This action cannot be undone.")) {
@@ -56,7 +99,6 @@ export default function UpcomingBattle({
     }
   }, [copied]);
 
-  const startTime = new Date(battle.start_time);
   const fmt = new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
@@ -105,22 +147,35 @@ export default function UpcomingBattle({
 
       {/* countdown */}
       <div className="text-center mt-4">
-        <h2 className="text-xl font-semibold mb-2">Battle starts in</h2>
+        <h2 className="text-xl font-semibold mb-2">
+          {hasPassedStartTime ? "Battle start time has passed" : "Battle starts in"}
+        </h2>
         <Countdown
           targetTime={startTime}
           onZero={() => {
-            queryClient.invalidateQueries({ queryKey: ["battle", battle.id] });
+            queryClient.refetchQueries({ queryKey: ["battle", battle.id] });
           }}
         />
-        {isCreator && (
-          <button
-            onClick={handleCancel}
-            disabled={cancelling}
-            className="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-          >
-            {cancelling ? "Cancelling..." : "Cancel Battle"}
-          </button>
-        )}
+        <div className="mt-4 flex gap-4 justify-center">
+          {isCreator && hasPassedStartTime && battle.status === "pending" && (
+            <button
+              onClick={handleStart}
+              disabled={starting}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {starting ? "Starting..." : "Start Battle Now"}
+            </button>
+          )}
+          {isCreator && (
+            <button
+              onClick={handleCancel}
+              disabled={cancelling}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {cancelling ? "Cancelling..." : "Cancel Battle"}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="mt-4 flex gap-12 flex-col lg:flex-row">

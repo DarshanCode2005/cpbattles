@@ -20,7 +20,7 @@ export default function Countdown({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [targetTime]);
+  }, [targetTime, onZero]);
 
   return <p className="text-2xl font-bold">{formatTimeLeft(timeLeft)}</p>;
 }
@@ -28,6 +28,9 @@ export default function Countdown({
 function calculateTimeLeft(targetTime: Date) {
   const now = new Date();
   const diff = targetTime.getTime() - now.getTime();
+  if (diff <= 0) {
+    return { hours: 0, minutes: 0, seconds: 0 };
+  }
   const hours = Math.floor(diff / 1000 / 60 / 60);
   const minutes = Math.floor((diff / 1000 / 60) % 60);
   const seconds = Math.floor((diff / 1000) % 60);
@@ -39,5 +42,8 @@ function formatTimeLeft(timeLeft: {
   minutes: number;
   seconds: number;
 }) {
+  if (timeLeft.hours === 0 && timeLeft.minutes === 0 && timeLeft.seconds === 0) {
+    return "Battle should have started";
+  }
   return `${timeLeft.hours}h ${timeLeft.minutes}m ${timeLeft.seconds}s`;
 }

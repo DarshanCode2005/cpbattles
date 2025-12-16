@@ -28,6 +28,20 @@ export default function BattlePage() {
       }
       return response.json();
     },
+    refetchInterval: (query) => {
+      const battle = query.state.data;
+      if (battle?.status === "pending") {
+        const startTime = new Date(battle.start_time);
+        const now = new Date();
+        if (now >= startTime) {
+          return 2000;
+        }
+      }
+      if (battle?.status === "in_progress") {
+        return false;
+      }
+      return false;
+    },
   });
 
   if (auth.loading) {
